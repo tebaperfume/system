@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRIZE24 — لوحة التحكم</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#050500; font-family:'Share Tech Mono',monospace; color:#fff; min-height:100vh; padding:24px 16px; }
+  .wrap { max-width:640px; margin:0 auto; }
+  .logo { font-family:'Orbitron',monospace; font-size:32px; font-weight:900; color:#ffdd00; text-align:center; letter-spacing:5px; text-shadow:0 0 24px rgba(255,220,0,0.7); }
+  .sub { font-size:10px; color:#554400; text-align:center; letter-spacing:5px; margin:6px 0 26px; }
+  .panel { background:rgba(10,8,0,0.95); border:1px solid #ccaa00; border-radius:6px; padding:24px 20px; box-shadow:0 0 40px rgba(200,170,0,0.15); margin-bottom:20px; }
+  label { font-size:11px; color:#887700; letter-spacing:3px; display:block; margin-bottom:6px; }
+  input { width:100%; background:rgba(20,16,0,0.9); border:1px solid #332200; border-radius:3px; color:#ffdd00; font-family:'Share Tech Mono',monospace; font-size:15px; padding:11px 14px; margin-bottom:16px; outline:none; letter-spacing:1px; direction:ltr; text-align:left; }
+  input:focus { border-color:#ccaa00; }
+  .btn { width:100%; background:linear-gradient(90deg,#ccaa00,#ffdd00,#cc8800); border:none; border-radius:3px; color:#000; font-family:'Orbitron',monospace; font-size:13px; font-weight:900; letter-spacing:4px; padding:13px; cursor:pointer; }
+  .btn:hover { box-shadow:0 0 25px rgba(255,220,0,0.5); }
+  .row { display:flex; align-items:center; gap:10px; background:rgba(20,16,0,0.7); border:1px solid #332200; border-radius:4px; padding:12px 14px; margin-bottom:10px; }
+  .uid { font-size:16px; color:#ffdd00; letter-spacing:2px; flex:1; direction:ltr; text-align:left; }
+  .st { font-size:10px; letter-spacing:2px; padding:4px 10px; border-radius:3px; }
+  .st.pending  { color:#ccaa00; border:1px solid #443300; }
+  .st.approved { color:#00cc44; border:1px solid #004d1a; }
+  .st.rejected { color:#ff4444; border:1px solid #4d0000; }
+  .act { font-family:'Share Tech Mono',monospace; font-size:13px; padding:6px 10px; border-radius:3px; cursor:pointer; background:transparent; }
+  .ok  { color:#00cc44; border:1px solid #004d1a; }
+  .no  { color:#ff4444; border:1px solid #4d0000; }
+  .del { color:#665500; border:1px solid #332200; }
+  .act:hover { filter:brightness(1.5); }
+  .stats { font-size:12px; color:#887700; text-align:center; margin-bottom:14px; letter-spacing:2px; }
+  .empty { text-align:center; color:#332200; font-size:13px; letter-spacing:2px; padding:24px 0; }
+  .err { color:#ff6600; font-size:12px; text-align:center; margin-top:10px; min-height:16px; }
+  .refresh { background:transparent; border:1px solid #443300; color:#665500; margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">PRIZE24</div>
+  <div class="sub">ADMIN PANEL</div>
+
+  <div class="panel" id="settings">
+    <label>// رابط مشروع Vercel</label>
+    <input id="api-base" placeholder="https://your-project.vercel.app">
+    <label>// كلمة سر المدير (ADMIN_SECRET)</label>
+    <input id="admin-secret" type="password" placeholder="••••••••">
+    <button class="btn" onclick="saveAndLoad()">دخول وعرض الطلبات ←</button>
+    <div class="err" id="err"></div>
+  </div>
+
+  <div class="panel" id="list-panel" style="display:none;">
+    <div class="stats" id="stats"></div>
+    <div id="rows"></div>
+    <button class="btn refresh" onclick="loadList()">تحديث ↻</button>
+  </div>
+</div>
+
+<script>
+function saveAndLoad(){
+  localStorage.setItem('apiBase', document.getElementById('api-base').value.trim().replace(/\/+$/,''));
+  localStorage.setItem('adminSecret', document.getElementById('admin-secret').value.trim());
+  loadList();
+}
+
+async function loadList(){
+  const err=document.getElementById('err');
+  const base=localStorage.getItem('apiBase');
+  const secret=localStorage.getItem('adminSecret');
+  if(!base||!secret){err.textContent='// اكتب الرابط وكلمة السر الأول';return;}
+  err.textContent='';
+  try{
+    const r=await fetch(base+'/api/admin',{headers:{'x-admin-secret':secret}});
+    const d=await r.json();
+    if(!d.ok){err.textContent='// '+(d.error==='unauthorized'?'كلمة السر غلط':'خطأ: '+(d.error||r.status));return;}
+    document.getElementById('settings').style.display='none';
+    document.getElementById('list-panel').style.display='block';
+    render(d.items||[]);
+  }catch(e){err.textContent='// مشكلة في الاتصال — اتأكد من رابط Vercel';}
+}
+
+function render(items){
+  const rows=document.getElementById('rows');
+  const st={pending:'⏳ بانتظار الموافقة',approved:'✅ مقبول',rejected:'⛔ مرفوض'};
+  const counts={pending:0,approved:0,rejected:0};
+  items.forEach(i=>counts[i.status]=(counts[i.status]||0)+1);
+  document.getElementById('stats').textContent='المقبولون: '+(counts.approved||0)+' | بانتظار: '+(counts.pending||0)+' | المرفوضون: '+(counts.rejected||0);
+  if(!items.length){rows.innerHTML='<div class="empty">لا يوجد طلبات تسجيل بعد</div>';return;}
+  rows.innerHTML=items.map(i=>
+    '<div class="row"><span class="uid">'+i.uid+'</span>'+
+    '<span class="st '+i.status+'">'+(st[i.status]||i.status)+'</span>'+
+    '<button class="act ok" onclick="act(\'approve\',\''+i.uid+'\')">✔</button>'+
+    '<button class="act no" onclick="act(\'reject\',\''+i.uid+'\')">✖</button>'+
+    '<button class="act del" onclick="act(\'delete\',\''+i.uid+'\')">🗑</button></div>'
+  ).join('');
+}
+
+async function act(action,uid){
+  const base=localStorage.getItem('apiBase');
+  const secret=localStorage.getItem('adminSecret');
+  await fetch(base+'/api/admin',{method:'POST',headers:{'Content-Type':'application/json','x-admin-secret':secret},body:JSON.stringify({action,uid})});
+  loadList();
+}
+
+document.getElementById('api-base').value=localStorage.getItem('apiBase')||'';
+document.getElementById('admin-secret').value=localStorage.getItem('adminSecret')||'';
+</script>
+</body>
+</html>
